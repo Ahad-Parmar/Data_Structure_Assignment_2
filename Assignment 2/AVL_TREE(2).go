@@ -1,203 +1,203 @@
+// AVL TREE
+
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
-
-type AVLTree struct {
-	root *AVLNode
+type Key interface {
+	Less(Key) bool
+	Eq(Key) bool
 }
 
-func (t *AVLTree) Add(key int, value int) {
-	t.root = t.root.add(key, value)
+type Node struct {
+	Data    Key
+	Balance int
+	Link    [2]*Node
 }
 
-func (t *AVLTree) Remove(key int) {
-	t.root.remove(key)
-}
-
-func (t *AVLTree) Update(old_Key int, new_Key int, new_Value int) {
-	t.root.remove(old_Key)
-	t.root = t.root.add(new_Key, new_Value)
-}
-
-func (t *AVLTree) Search(key int) (node *AVLNode) {
-	return t.root.search(key)
-}
-
-func (t *AVLTree) DIO() {                      //DIO - display in order
-	t.root.DNIO()                          //DNIO - display nodes in order
+func opp(dir int) int {
+	return 1 - dir
 }
 
 
-type AVLNode struct {
-	key   int
-	Value int
-
-	
-	count_nodes int
-	left   *AVLNode
-	right  *AVLNode
+func single(root *Node, dir int) *Node {
+	save := root.Link[opp(dir)]
+	root.Link[opp(dir)] = save.Link[dir]
+	save.Link[dir] = root
+	return save
 }
 
 
-func (n *AVLNode) add(key int, value int) *AVLNode {
-	if n == nil {
-		return &AVLNode{key, value, 1, nil, nil}
+func double(root *Node, dir int) *Node {
+	save := root.Link[opp(dir)].Link[dir]
+
+	root.Link[opp(dir)].Link[dir] = save.Link[opp(dir)]
+	save.Link[opp(dir)] = root.Link[opp(dir)]
+	root.Link[opp(dir)] = save
+
+	save = root.Link[opp(dir)]
+	root.Link[opp(dir)] = save.Link[dir]
+	save.Link[dir] = root
+	return save
+}
+
+
+func adjustBalance(root *Node, dir, bal int) {
+	n := root.Link[dir]
+	nn := n.Link[opp(dir)]
+	switch nn.Balance {
+	case 0:
+		root.Balance = 0
+		n.Balance = 0
+	case bal:
+		root.Balance = -bal
+		n.Balance = 0
+	default:
+		root.Balance = 0
+		n.Balance = bal
 	}
-
-	if key < n.key {
-		n.left = n.left.add(key, value)
-	} else if key > n.key {
-		n.right = n.right.add(key, value)
-	} else {
-		n.Value = value
-	}
-	return n.rebalanceTree()
+	nn.Balance = 0
 }
 
-func (n *AVLNode) remove(key int) *AVLNode {
-	if n == nil {
-		return nil
+func insertBalance(root *Node, dir int) *Node {
+	n := root.Link[dir]
+	bal := 2*dir - 1
+	if n.Balance == bal {
+		root.Balance = 0
+		n.Balance = 0
+		return single(root, opp(dir))
 	}
-	if key < n.key {
-		n.left = n.left.remove(key)
-	} else if key > n.key {
-		n.right = n.right.remove(key)
-	} else {
-		if n.left != nil && n.right != nil {
-			
-			rightMinNode := n.right.findSmallest()
-			n.key = rightMinNode.key
-			n.Value = rightMinNode.Value
-			n.right = n.right.remove(rightMinNode.key)
-		} else if n.left != nil {
-			n = n.left
-		} else if n.right != nil {
-			n = n.right
-		} else {
-			n = nil
-			return n
+	adjustBalance(root, dir, bal)
+	return double(root, opp(dir))
+}
+
+func insertR(root *Node, data Key) (*Node, bool) {
+	if root == nil {
+		return &Node{Data: data}, false
+	}
+	dir := 0
+	if root.Data.Less(data) {
+		dir = 1
+	}
+	var done bool
+	root.Link[dir], done = insertR(root.Link[dir], data)
+	if done {
+		return root, true
+	}
+	root.Balance += 2*dir - 1
+	switch root.Balance {
+	case 0:
+		return root, true
+	case 1, -1:
+		return root, false
+	}
+	return insertBalance(root, dir), true
+}
+
+
+func Insert(tree **Node, data Key) {
+	*tree, _ = insertR(*tree, data)
+}
+
+
+func Remove(tree **Node, data Key) {
+	*tree, _ = removeR(*tree, data)
+}
+
+func removeBalance(root *Node, dir int) (*Node, bool) {
+	n := root.Link[opp(dir)]
+	bal := 2*dir - 1
+	switch n.Balance {
+	case -bal:
+		root.Balance = 0
+		n.Balance = 0
+		return single(root, dir), false
+	case bal:
+		adjustBalance(root, opp(dir), -bal)
+		return double(root, dir), false
+	}
+	root.Balance = -bal
+	n.Balance = bal
+	return single(root, dir), true
+}
+
+func removeR(root *Node, data Key) (*Node, bool) {
+	if root == nil {
+		return nil, false
+	}
+	if root.Data.Eq(data) {
+		switch {
+		case root.Link[0] == nil:
+			return root.Link[1], false
+		case root.Link[1] == nil:
+			return root.Link[0], false
 		}
-
-	}
-	return n.rebalanceTree()
-}
-
-
-func (n *AVLNode) search(key int) *AVLNode {
-	if n == nil {
-		return nil
-	}
-	if key < n.key {
-		return n.left.search(key)
-	} else if key > n.key {
-		return n.right.search(key)
-	} else {
-		return n
-	}
-}
-
-
-func (n *AVLNode) DNIO() {
-	if n.left != nil {
-		n.left.DNIO()
-	}
-	fmt.Print(n.key, " ")
-	if n.right != nil {
-		n.right.DNIO()
-	}
-}
-
-func (n *AVLNode) getcount_nodes() int {
-	if n == nil {
-		return 0
-	}
-	return n.count_nodes
-}
-
-func (n *AVLNode) re_count_nodes() {
-	n.count_nodes = 1 + max(n.left.getcount_nodes(), n.right.count_nodes())
-}
-
-
-func (n *AVLNode) rebalanceTree() *AVLNode {
-	if n == nil {
-		return n
-	}
-	n.re_count_nodes()
-
-	// check balance factor 
-
-	balanceFactor := n.left.getcount_nodes() - n.right.getcount_nodes()
-	if balanceFactor == -2 {
-		
-		if n.right.left.getcount_nodes() > n.right.right.getcount_nodes() {
-			n.right = n.right.rotateRight()
+		heir := root.Link[0]
+		for heir.Link[1] != nil {
+			heir = heir.Link[1]
 		}
-		return n.rotateLeft()
-	} else if balanceFactor == 2 {
-		
-		if n.left.right.getcount_nodes() > n.left.left.getcount_nodes() {
-			n.left = n.left.rotateLeft()
-		}
-		return n.rotateRight()
+		root.Data = heir.Data
+		data = heir.Data
 	}
-	return n
-}
-
-
-func (n *AVLNode) rotateLeft() *AVLNode {
-	newRoot := n.right
-	n.right = newRoot.left
-	newRoot.left = n
-
-	n.recalculateHeight()
-	newRoot.re_count_nodes()
-	return newRoot
-}
-
-
-func (n *AVLNode) rotateRight() *AVLNode {
-	newRoot := n.left
-	n.left = newRoot.right
-	newRoot.right = n
-
-	n.recalculateHeight()
-	newRoot.re_count_nodes()
-	return newRoot
-}
-
-
-func (n *AVLNode) findSmallest() *AVLNode {
-	if n.left != nil {
-		return n.left.findSmallest()
-	} else {
-		return n
+	dir := 0
+	if root.Data.Less(data) {
+		dir = 1
 	}
-}
-
-
-func max(a int, b int) int {
-	if a > b {
-		return a
+	var done bool
+	root.Link[dir], done = removeR(root.Link[dir], data)
+	if done {
+		return root, true
 	}
-	return b
+	root.Balance += 1 - 2*dir
+	switch root.Balance {
+	case 1, -1:
+		return root, true
+	case 0:
+		return root, false
+	}
+	return removeBalance(root, dir)
 }
 
+type intKey int
+
+func (k intKey) Less(k2 Key) bool { return k < k2.(intKey) }
+func (k intKey) Eq(k2 Key) bool   { return k == k2.(intKey) }
 
 func main() {
-    tree := new(avltree.AVLTree)
+	var tree *Node
+	fmt.Println("Empty Tree:")
+	avl, _ := json.MarshalIndent(tree, "", "   ")
+	fmt.Println(string(avl))
+	fmt.Println("\nInsert Tree:")
 
-    keys := []int{5,7,4,2,3}
-    for _, key := range keys {
-        tree.Add(key, key*key)
-    }   
+	var n int
+	fmt.Print("Enter number of nodes : ")
+	fmt.Scan(&n)
+	for i := 0; i < n; i++ {
+		var val int
+		fmt.Print("Enter value of node : ")
+		fmt.Scan(&val)
+		Insert(&tree, intKey(val))
+	}
+	avl, _ = json.MarshalIndent(tree, "", "   ")
+	fmt.Println(string(avl))
 
-    tree.Remove(3)
-    tree.Update(4, 8, 8*8)
-    tree.DIO()
-
-    val := tree.Search(2).Value
+	var c string
+	fmt.Print("Do you want to delete value (y/n) : ")
+	fmt.Scan(&c)
+	if c == "y" || c == "Y" {
+		var d int
+		fmt.Print("Enter value to be deleted : ")
+		fmt.Scan(&d)
+		Remove(&tree, intKey(d))
+		avl, _ = json.MarshalIndent(tree, "", "   ")
+		fmt.Println(string(avl))
+	} else if c == "n" || c == "N" {
+		fmt.Print("Done!")
+	} else {
+		fmt.Println("Invalid choice!")
+	}
 }
